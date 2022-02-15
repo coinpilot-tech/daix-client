@@ -26,7 +26,7 @@
 </nav>
 <!-- container -->
 <div style="margin: 5%; text-align: center;">
-    <h1>Sex</h1>
+    <h1>welcome:</h1>
     <a class="waves-effect waves-light btn-large grey darken-3" onclick="$('#modal1').modal('open')"><i
             class="material-icons left">login</i>login</a><br><br>
     <a class="waves-effect waves-light btn-large grey darken-3" onclick="$('#modal2').modal('open')"><i
@@ -41,8 +41,8 @@
             <label for="username">Username</label>
         </div>
         <div class="input-field">
-            <input id="#password" type="#password" class="validate white-text">
-            <label for="#password">Password</label>
+            <input id="password" type="password" class="validate white-text">
+            <label for="password">Password</label>
         </div>
     </div>
     <div class="modal-footer grey darken-4">
@@ -106,6 +106,7 @@
         let username = $("#username").val();
         let password = $("#password").val();
 
+        M.toast({html: "Retrieving secondary scrypt salt..."});
         let cancelled = false;
         let hexSecondarySalt = await fetch(apiUrl + "/getSalt", {
             method: "POST",
@@ -129,6 +130,50 @@
             }
         }).then(json => json.message);
         if (cancelled) return;
+
+        M.toast({html: "Fetching records..."});
+        let secondaryScrypt = crypto.scryptSync(password, Buffer.from(hexSecondarySalt, "hex"), 32, {N: 16384, r: 16, p: 1, maxmem: 1000000000});
+        let record = await fetch(apiUrl + "/fetchRecord", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username,
+                secondaryScrypt: secondaryScrypt.toString("hex")
+            })
+        }).then(res => {
+            if (res.status !== 200) {
+                $("#modal1").modal("close");
+                $("#username").val("");
+                $("#password").val("");
+                M.toast({html: "Password is incorrect. Please try again."});
+                cancelled = true;
+                return new Promise(resolve => resolve({message: "N/A"}));
+            }
+            else {
+                return res.json();
+            }
+        });
+        if (cancelled) return;
+
+        M.toast({html: "Logging in..."});
+        let primaryScrypt = crypto.scryptSync(password, Buffer.from(record.primaryScryptSalt, "hex"), 32, {N: 16384, r: 16, p: 1, maxmem: 1000000000});
+
+        localStorage.setItem("primarySalt", record.primaryScryptSalt);
+        localStorage.setItem("secondarySalt", record.secondaryScryptSalt);
+        localStorage.setItem("primaryScrypt", primaryScrypt.toString("hex"));
+        localStorage.setItem("secondaryScrypt", record.secondaryScrypt);
+        localStorage.setItem("privateKey", record.privateKey);
+        localStorage.setItem("publicKey", record.publicKey);
+        localStorage.setItem("accountId", record.accountId);
+        localStorage.setItem("loggedIn", "true");
+
+        $("#modal1").modal("close");
+        $("#username").val("");
+        $("#password").val("");
+        M.toast({html: "Logged in. Redirecting now."});
+        setTimeout(() => window.location.replace("home.html"), 500);
     }
 
     // register function
@@ -213,6 +258,7 @@
                 localStorage.setItem("secondaryScrypt", hexSecondaryScrypt);
                 localStorage.setItem("privateKey", hexMnemonic);
                 localStorage.setItem("publicKey", hexPublicKey);
+                localStorage.setItem("accountId", accountId);
                 localStorage.setItem("loggedIn", "true");
                 $("#modal2").modal("close");
                 $("#name").val("");
