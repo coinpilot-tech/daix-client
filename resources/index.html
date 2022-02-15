@@ -1,0 +1,227 @@
+<!DOCTYPE HTML>
+<html>
+<!--
+    Copyright (C) 2022 Coinpilot Tech. All rights reserved.
+    This file is part of daix-client.
+    daix-client is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+    daix-client is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+    You should have received a copy of the GNU Affero General Public License along with daix-server. If not, see <https://www.gnu.org/licenses/>.
+-->
+<head>
+    <meta charset="utf-8">
+    <!-- resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+</head>
+<body class="grey darken-4 white-text" style="height: 100%; width: 100%">
+<!-- nav -->
+<nav class="grey darken-3 white-text">
+    <div class="nav-wrapper grey darken-3">
+        <a href="#" class="brand-logo center">daix</a>
+    </div>
+</nav>
+<!-- container -->
+<div style="margin: 5%; text-align: center;">
+    <h1>Sex</h1>
+    <a class="waves-effect waves-light btn-large grey darken-3" onclick="$('#modal1').modal('open')"><i
+            class="material-icons left">login</i>login</a><br><br>
+    <a class="waves-effect waves-light btn-large grey darken-3" onclick="$('#modal2').modal('open')"><i
+            class="material-icons left">add</i>register</a>
+</div>
+<!-- modals -->
+<div id="modal1" class="modal grey darken-4">
+    <div class="modal-content">
+        <h4>Login</h4>
+        <div class="input-field">
+            <input id="username" type="text" class="validate white-text">
+            <label for="username">Username</label>
+        </div>
+        <div class="input-field">
+            <input id="#password" type="#password" class="validate white-text">
+            <label for="#password">Password</label>
+        </div>
+    </div>
+    <div class="modal-footer grey darken-4">
+        <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="login()">Login</a>
+    </div>
+</div>
+<div id="modal2" class="modal grey darken-4">
+    <div class="modal-content">
+        <h4>Register</h4>
+        <div class="input-field">
+            <input id="name" type="text" class="validate white-text">
+            <label for="name">Username</label>
+        </div>
+        <div class="input-field">
+            <input id="pass" type="password" class="validate white-text">
+            <label for="pass">Password</label>
+        </div>
+    </div>
+    <div class="modal-footer grey darken-4">
+        <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="register()">Register</a>
+    </div>
+</div>
+
+<!-- scripts -->
+<script>
+    window.$ = window.jQuery = require("jquery");
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+<script>
+    // deps
+    let nacl = require("tweetnacl");
+    const crypto = require("crypto");
+    const hedera = require("@hashgraph/sdk");
+    const {apiUrl} = require("../config.json");
+    nacl.util = require("tweetnacl-util");
+
+    // redirect to home if logged in
+    if (localStorage.getItem("loggedIn") !== null) {
+        window.location.replace("home.html");
+    }
+
+    // init modals
+    $(document).ready(() => {
+        $(".modal").modal();
+    });
+
+    // buffer to uint8
+    function bufferToUint8(buffer) {
+        return new Uint8Array(buffer.buffer);
+    }
+
+    // uint8 to buffer
+    function uint8ToBuffer(uint8) {
+        return new Buffer(uint8);
+    }
+
+    // login function
+    async function login() {
+        M.toast({html: "Logging in. Please do not click off."});
+
+        let username = $("#username").val();
+        let password = $("#password").val();
+
+        let cancelled = false;
+        let hexSecondarySalt = await fetch(apiUrl + "/getSalt", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username
+            })
+        }).then(res => {
+            if (res.status !== 200) {
+                $("#modal1").modal("close");
+                $("#username").val("");
+                $("#password").val("");
+                M.toast({html: "Username does not exist."});
+                cancelled = true;
+                return new Promise(resolve => resolve({message: "N/A"}));
+            }
+            else {
+                return res.json();
+            }
+        }).then(json => json.message);
+        if (cancelled) return;
+    }
+
+    // register function
+    async function register() {
+        M.toast({html: "Registering. Please do not click off."});
+
+        let username = $("#name").val();
+        let password = $("#pass").val();
+
+        M.toast({html: "Generating key..."});
+        let mnemonic = await hedera.Mnemonic.generate();
+        let privateKey = await mnemonic.toPrivateKey();
+        let publicKey = privateKey.publicKey;
+
+        let cancelled = false;
+
+        M.toast({html: "Creating Hedera account..."});
+        let accountId = await fetch(apiUrl + "/hederaCreate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                publicKey: publicKey.toString()
+            })
+        }).then(res => {
+            if (res.status !== 201) {
+                $("#modal2").modal("close");
+                $("#name").val("");
+                $("#pass").val("");
+                M.toast({html: "Could not create account. Please wait and try again."});
+                cancelled = true;
+                return new Promise(resolve => resolve({message: "N/A"}));
+            } else {
+                return res.json();
+            }
+        }).then(json => json.message);
+
+        if (cancelled) return;
+
+        M.toast({html: "Encrypting key..."});
+        let primarySalt = crypto.randomBytes(32);
+        let secondarySalt = crypto.randomBytes(32);
+        let primaryScrypt = crypto.scryptSync(password, primarySalt, 32, {N: 16384, r: 16, p: 1, maxmem: 1000000000});
+        let secondaryScrypt = crypto.scryptSync(password, secondarySalt, 32, {N: 16384, r: 16, p: 1, maxmem: 1000000000});
+
+        let mnemonicNonce = nacl.randomBytes(24);
+        let encryptedMnemonic = nacl.secretbox(nacl.util.decodeUTF8(mnemonic.toString()), mnemonicNonce, bufferToUint8(primaryScrypt));
+
+        let hexPrimarySalt = primarySalt.toString("hex");
+        let hexSecondarySalt = secondarySalt.toString("hex");
+        let hexPrimaryScrypt = primaryScrypt.toString("hex");
+        let hexSecondaryScrypt = secondaryScrypt.toString("hex");
+        let hexMnemonic = uint8ToBuffer(new Uint8Array([...mnemonicNonce, ...encryptedMnemonic])).toString("hex");
+        let hexPublicKey = publicKey.toString();
+
+        M.toast({html: "Registering account..."});
+        await fetch(apiUrl + "/createUser", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                publicKey: hexPublicKey,
+                primaryScryptSalt: hexPrimarySalt,
+                secondaryScryptSalt: hexSecondarySalt,
+                accountId,
+                secondaryScrypt: hexSecondaryScrypt,
+                privateKey: hexMnemonic,
+                username
+            })
+        }).then(res => {
+            if (res.status !== 201) {
+                $("#modal2").modal("close");
+                $("#name").val("");
+                $("#pass").val("");
+                M.toast({html: "Could not create account. Please try again."});
+            } else {
+                localStorage.setItem("primarySalt", hexPrimarySalt);
+                localStorage.setItem("secondarySalt", hexSecondarySalt);
+                localStorage.setItem("primaryScrypt", hexPrimaryScrypt);
+                localStorage.setItem("secondaryScrypt", hexSecondaryScrypt);
+                localStorage.setItem("privateKey", hexMnemonic);
+                localStorage.setItem("publicKey", hexPublicKey);
+                localStorage.setItem("loggedIn", "true");
+                $("#modal2").modal("close");
+                $("#name").val("");
+                $("#pass").val("");
+                M.toast({html: "Account created. Redirecting now."});
+                setTimeout(() => window.location.replace("home.html"), 500);
+            }
+        });
+    }
+</script>
+</body>
+</html>
