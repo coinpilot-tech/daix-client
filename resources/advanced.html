@@ -26,12 +26,19 @@
 </nav>
 <!-- container -->
 <div style="margin: 5%; text-align: center;">
-    <a class="waves-effect waves-light btn-large grey darken-3" onclick="window.location.replace('wallet.html')"><i
-            class="material-icons left">account_balance_wallet</i>wallet</a><br><br>
-    <a class="waves-effect waves-light btn-large grey darken-3" onclick="logout()"><i
-            class="material-icons left">logout</i>log out</a><br><br>
-    <a class="waves-effect waves-light btn-large grey darken-3" onclick="window.location.replace('advanced.html')"><i
-            class="material-icons left">tune</i>advanced settings</a>
+    <a class="waves-effect waves-light btn grey darken-3" onclick="window.location.replace('home.html')"><i
+            class="material-icons left">arrow_back</i>back</a><br><br>
+    <a class="waves-effect waves-light btn-large grey darken-3" onclick="$('#modal1').modal('open')"><i
+            class="material-icons left">key</i>view seed</a>
+</div>
+<div id="modal1" class="modal grey darken-4">
+    <div class="modal-content">
+        <h4>Seed</h4>
+        <p><span id="seed">Loading...</span><br><br><b>Do not share your seed with anyone! Write it down. You can recover your account with the seed if you forget your password.</b></p>
+    </div>
+    <div class="modal-footer grey darken-4">
+        <a href="#!" class="waves-effect waves-light btn-flat white-text modal-close">Close</a>
+    </div>
 </div>
 <!-- scripts -->
 <script>
@@ -39,17 +46,42 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 <script>
+    // deps
+    let nacl = require("tweetnacl");
+    const crypto = require("crypto");
+    nacl.util = require("tweetnacl-util");
+
     // redirect to the login page if not logged in (we shouldn't need this, but just in case)
     if (localStorage.getItem("loggedIn") === null) {
         window.location.replace("index.html");
     }
 
-    // log out
-    function logout() {
-        M.toast({html: "Logging out..."});
-        localStorage.clear();
-        window.location.replace("index.html");
+    // init modals
+    $(document).ready(() => {
+        $(".modal").modal();
+    });
+
+    // buffer to uint8
+    function bufferToUint8(buffer) {
+        return new Uint8Array(buffer);
     }
+
+    // uint8 to buffer
+    function uint8ToBuffer(uint8) {
+        return new Buffer(uint8);
+    }
+
+    // decrypt mnemonic from storage
+    M.toast({html: "Decrypting key..."});
+    let mnemonicKey = bufferToUint8(Buffer.from(localStorage.getItem("primaryScrypt"), "hex"));
+    let fullMnemonic = bufferToUint8(Buffer.from(localStorage.getItem("privateKey"), "hex"));
+    let mnemonicNonce = fullMnemonic.slice(0, 24);
+    let mnemonicCrypt = fullMnemonic.slice(24);
+    let mnemonicUint8 = nacl.secretbox.open(mnemonicCrypt, mnemonicNonce, mnemonicKey);
+    let mnemonic = nacl.util.encodeUTF8(mnemonicUint8);
+
+    // set seed
+    $("#seed").text(mnemonic);
 </script>
 </body>
 </html>

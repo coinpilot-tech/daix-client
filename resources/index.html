@@ -60,6 +60,7 @@
             <input id="pass" type="password" class="validate white-text">
             <label for="pass">Password</label>
         </div>
+        <p><b>Make sure your password is secure! If your password is broken, an attacker can get access to your wallet.</b></p>
     </div>
     <div class="modal-footer grey darken-4">
         <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="register()">Register</a>
@@ -75,6 +76,7 @@
     // deps
     let nacl = require("tweetnacl");
     const crypto = require("crypto");
+    const zxcvbn = require("zxcvbn");
     const hedera = require("@hashgraph/sdk");
     const {apiUrl} = require("../config.json");
     nacl.util = require("tweetnacl-util");
@@ -91,7 +93,7 @@
 
     // buffer to uint8
     function bufferToUint8(buffer) {
-        return new Uint8Array(buffer.buffer);
+        return new Uint8Array(buffer);
     }
 
     // uint8 to buffer
@@ -195,6 +197,13 @@
         // generate the username and password
         let username = $("#name").val();
         let password = $("#pass").val();
+
+        // ensure our password is safe
+        let { score } = zxcvbn(password);
+        if (score < 3) {
+            M.toast({html: "Your password is not secure enough!"});
+            return;
+        }
 
         // generate a mnemonic, then recover the private key and public key frmo it
         M.toast({html: "Generating key..."});

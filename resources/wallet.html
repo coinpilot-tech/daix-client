@@ -1,0 +1,163 @@
+<!DOCTYPE HTML>
+<html>
+<!--
+    Copyright (C) 2022 Coinpilot Tech. All rights reserved.
+    This file is part of daix-client.
+    daix-client is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+    daix-client is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+    You should have received a copy of the GNU Affero General Public License along with daix-server. If not, see <https://www.gnu.org/licenses/>.
+-->
+<head>
+    <meta charset="utf-8">
+    <!-- resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+</head>
+<body class="grey darken-4 white-text" style="height: 100%; width: 100%">
+<!-- nav -->
+<nav class="grey darken-3 white-text">
+    <div class="nav-wrapper grey darken-3">
+        <a href="#" class="brand-logo center">daix</a>
+    </div>
+</nav>
+<!-- container -->
+<div style="margin: 5%; text-align: center;">
+    <a class="waves-effect waves-light btn grey darken-3" onclick="window.location.replace('home.html')"><i
+            class="material-icons left">arrow_back</i>back</a>
+    <h1>Wallet</h1>
+    <h3><span id="balance">Loading...</span></h3>
+    <h5>Account ID: <span id="accountId">Loading...</span></h5><br>
+    <a class="waves-effect waves-light btn grey darken-3" onclick="$('#modal3').modal('open')"><i
+            class="material-icons left">key</i>view seed</a>&nbsp;&nbsp;
+</div>
+<!-- modals -->
+<div id="modal1" class="modal grey darken-4">
+    <div class="modal-content">
+        <h4>Transfer</h4>
+        <div class="input-field">
+            <input id="destination" type="text" class="validate white-text">
+            <label for="destination">Destination</label>
+        </div>
+        <div class="input-field">
+            <input id="amount" type="number" class="validate white-text">
+            <label for="amount">Amount</label>
+        </div>
+    </div>
+    <div class="modal-footer grey darken-4">
+        <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="transfer()">Login</a>
+    </div>
+</div>
+<div id="modal2" class="modal grey darken-4">
+    <div class="modal-content">
+        <h4>Register</h4>
+        <div class="input-field">
+            <input id="name" type="text" class="validate white-text">
+            <label for="name">Username</label>
+        </div>
+        <div class="input-field">
+            <input id="pass" type="password" class="validate white-text">
+            <label for="pass">Password</label>
+        </div>
+    </div>
+    <div class="modal-footer grey darken-4">
+        <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="register()">Register</a>
+    </div>
+</div>
+
+<!-- scripts -->
+<script>
+    window.$ = window.jQuery = require("jquery");
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+<script>
+    // deps
+    let nacl = require("tweetnacl");
+    const crypto = require("crypto");
+    const hedera = require("@hashgraph/sdk");
+    const {apiUrl, network, daixId} = require("../config.json");
+    nacl.util = require("tweetnacl-util");
+
+    // balance
+    let balanceInt = 0;
+
+    // client
+    let client = null;
+
+    // set some strings
+    let accountId = localStorage.getItem("accountId");
+
+    // redirect to index if not logged in (shouldn't happen but just in case)
+    if (localStorage.getItem("loggedIn") === null) {
+        window.location.replace("index.html");
+    }
+
+    // init modals
+    $(document).ready(() => {
+        $(".modal").modal();
+    });
+
+    // buffer to uint8
+    function bufferToUint8(buffer) {
+        return new Uint8Array(buffer);
+    }
+
+    // uint8 to buffer
+    function uint8ToBuffer(uint8) {
+        return new Buffer(uint8);
+    }
+
+    // function to retrieve balance
+    async function getBalance() {
+        let balanceQuery = new hedera.AccountBalanceQuery().setAccountId(accountId);
+        let balance = await balanceQuery.execute(client);
+        balanceInt = +((hedera.Hbar.fromString(balance.hbars.toString()).to(hedera.HbarUnit.Hbar)).toString());
+        $("#balance").text(balance.hbars.toString());
+        return balance.hbars.toString();
+    }
+
+    // function to run on startup
+    async function main() {
+        // decrypt mnemonic from storage
+        M.toast({html: "Decrypting key..."});
+        let mnemonicKey = bufferToUint8(Buffer.from(localStorage.getItem("primaryScrypt"), "hex"));
+        let fullMnemonic = bufferToUint8(Buffer.from(localStorage.getItem("privateKey"), "hex"));
+        let mnemonicNonce = fullMnemonic.slice(0, 24);
+        let mnemonicCrypt = fullMnemonic.slice(24);
+        let mnemonicUint8 = nacl.secretbox.open(mnemonicCrypt, mnemonicNonce, mnemonicKey);
+        let mnemonic = nacl.util.encodeUTF8(mnemonicUint8);
+
+        // create client
+        M.toast({html: "Connecting to Hedera network..."});
+        client = hedera.Client.forName(network).setOperator(
+            hedera.AccountId.fromString(accountId),
+            await hedera.PrivateKey.fromMnemonic(mnemonic)
+        );
+
+        // set balance
+        await getBalance();
+        // set account id
+        $("#accountId").text(accountId);
+    }
+
+    main();
+
+    // function to transfer balance
+    async function transferBalance(destination, amount) {
+        await getBalance();
+        if (amount > balanceInt) throw new Error("The amount the user is attempting to send is too much.");
+        else if (amount <= 0) throw new Error("Negative money cannot be sent.");
+        let txn = await new hedera.TransferTransaction()
+            .addHbarTransfer(accountId, -amount)
+            .addHbarTransfer(destination, amount)
+            .execute(client);
+        let receipt = await txn.getReceipt(client);
+        await getBalance();
+        if (receipt.status.toString() !== "SUCCESS") throw new Error("Transaction was unsuccessful.");
+    }
+</script>
+</body>
+</html>
