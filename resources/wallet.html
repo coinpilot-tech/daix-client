@@ -31,8 +31,8 @@
     <h1>Wallet</h1>
     <h3><span id="balance">Loading...</span></h3>
     <h5>Account ID: <span id="accountId">Loading...</span></h5><br>
-    <a class="waves-effect waves-light btn grey darken-3" onclick="$('#modal3').modal('open')"><i
-            class="material-icons left">key</i>view seed</a>&nbsp;&nbsp;
+    <a class="waves-effect waves-light btn-large grey darken-3" onclick="$('#modal1').modal('open')"><i
+            class="material-icons left">payments</i>Transfer</a>
 </div>
 <!-- modals -->
 <div id="modal1" class="modal grey darken-4">
@@ -48,23 +48,7 @@
         </div>
     </div>
     <div class="modal-footer grey darken-4">
-        <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="transfer()">Login</a>
-    </div>
-</div>
-<div id="modal2" class="modal grey darken-4">
-    <div class="modal-content">
-        <h4>Register</h4>
-        <div class="input-field">
-            <input id="name" type="text" class="validate white-text">
-            <label for="name">Username</label>
-        </div>
-        <div class="input-field">
-            <input id="pass" type="password" class="validate white-text">
-            <label for="pass">Password</label>
-        </div>
-    </div>
-    <div class="modal-footer grey darken-4">
-        <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="register()">Register</a>
+        <a href="#!" class="waves-effect waves-light btn-flat white-text" onclick="transfer()">Transfer</a>
     </div>
 </div>
 
@@ -148,8 +132,8 @@
     // function to transfer balance
     async function transferBalance(destination, amount) {
         await getBalance();
-        if (amount > balanceInt) throw new Error("The amount the user is attempting to send is too much.");
-        else if (amount <= 0) throw new Error("Negative money cannot be sent.");
+        if (amount > balanceInt) throw new Error("Not enough money is available to complete the transaction.");
+        else if (amount <= 0) throw new Error("Negative (or zero) money cannot be sent.");
         let txn = await new hedera.TransferTransaction()
             .addHbarTransfer(accountId, -amount)
             .addHbarTransfer(destination, amount)
@@ -157,6 +141,23 @@
         let receipt = await txn.getReceipt(client);
         await getBalance();
         if (receipt.status.toString() !== "SUCCESS") throw new Error("Transaction was unsuccessful.");
+    }
+
+    // function for the transfer balance modal
+    async function transfer() {
+        M.toast({html: "Transferring..."});
+        let amount = +$("#amount").val();
+        let accountId = $("#destination").val();
+        try {
+            await transferBalance(accountId, amount);
+            $("#amount").val("");
+            $("#accountId").val("");
+            M.toast({html: "Amount successfully transferred."});
+            $("#modal1").modal("close");
+        }
+        catch (e) {
+            M.toast({html: e.toString()});
+        }
     }
 </script>
 </body>
